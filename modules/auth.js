@@ -1,7 +1,40 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
-const sessions = new Map();
 const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 часа
+const SESSIONS_FILE = path.join(__dirname, '..', 'data', 'sessions.json');
+
+// Загрузка сессий из файла
+function loadSessions() {
+    try {
+        if (fs.existsSync(SESSIONS_FILE)) {
+            const data = fs.readFileSync(SESSIONS_FILE, 'utf8');
+            const parsed = JSON.parse(data);
+            return new Map(Object.entries(parsed));
+        }
+    } catch (e) {
+        console.error('Error loading sessions:', e.message);
+    }
+    return new Map();
+}
+
+// Сохранение сессий в файл
+function saveSessions(sessions) {
+    try {
+        const dir = path.dirname(SESSIONS_FILE);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        const obj = Object.fromEntries(sessions);
+        fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj, null, 2));
+    } catch (e) {
+        console.error('Error saving sessions:', e.message);
+    }
+}
+
+// Инициализация сессий из файла
+let sessions = loadSessions();
 
 function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
@@ -13,6 +46,7 @@ function createSession(username) {
         username,
         createdAt: Date.now()
     });
+    saveSessions(sessions);
     return sessionId;
 }
 
@@ -24,14 +58,20 @@ function validateSession(sessionId) {
 
     if (Date.now() - session.createdAt > SESSION_DURATION) {
         sessions.delete(sessionId);
+        saveSessions(sessions);
         return false;
     }
+
+    // Обновляем время активности при каждой проверке (sliding expiration)
+    session.lastActivity = Date.now();
+    saveSessions(sessions);
 
     return true;
 }
 
 function destroySession(sessionId) {
     sessions.delete(sessionId);
+    saveSessions(sessions);
 }
 
 function authMiddleware(req, res, next) {

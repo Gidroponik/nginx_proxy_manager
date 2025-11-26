@@ -276,6 +276,16 @@ app.get(SECRET_PATH + '/api/system-load', authMiddleware, async (req, res) => {
         const currentTime = Date.now();
         const timeDiff = (currentTime - prevNetworkTime) / 1000; // в секундах
 
+        // Получаем IPv4 адреса для каждого интерфейса
+        const networkInterfaces = os.networkInterfaces();
+        const ifaceIpMap = {};
+        for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+            const ipv4 = interfaces.find(i => i.family === 'IPv4' && !i.internal);
+            if (ipv4) {
+                ifaceIpMap[name] = ipv4.address;
+            }
+        }
+
         try {
             const { stdout } = await execPromise("cat /proc/net/dev | tail -n +3");
             const lines = stdout.trim().split('\n');
@@ -300,6 +310,7 @@ app.get(SECRET_PATH + '/api/system-load', authMiddleware, async (req, res) => {
 
                         networkStats.push({
                             interface: iface,
+                            ipv4: ifaceIpMap[iface] || null,
                             rx: formatBytes(rxBytes),
                             tx: formatBytes(txBytes),
                             rxSpeed: formatSpeed(rxSpeed),

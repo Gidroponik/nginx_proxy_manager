@@ -301,21 +301,7 @@
                         <i class="ri-wifi-line text-purple-400"></i>
                         <span class="font-medium">Сеть</span>
                     </div>
-                    <!-- Network Graph -->
-                    <div class="mb-4">
-                        <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                            <span>Скорость</span>
-                            <span id="networkGraphMax">0 KB/s</span>
-                        </div>
-                        <div class="relative h-24 bg-dark-card rounded-lg overflow-hidden border border-dark-border">
-                            <canvas id="networkGraph" class="w-full h-full"></canvas>
-                            <div class="absolute bottom-1 right-2 flex items-center gap-3 text-xs">
-                                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-green-400 rounded-full"></span> Download</span>
-                                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-400 rounded-full"></span> Upload</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="loadNetwork" class="space-y-2">
+                    <div id="loadNetwork" class="space-y-4">
                         <div class="text-gray-500 text-sm">Загрузка...</div>
                     </div>
                 </div>
@@ -620,6 +606,13 @@
         // Действия
         document.getElementById('siteForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const originalContent = submitBtn.innerHTML;
+
+            // Включаем лоадинг
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="ri-loader-4-line animate-spin"></i> Сохранение...';
+
             const formData = new FormData(e.target);
             const filename = formData.get('filename');
             const isEdit = !!filename;
@@ -658,6 +651,10 @@
                 }
             } catch (e) {
                 alert('Ошибка сохранения');
+            } finally {
+                // Выключаем лоадинг
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalContent;
             }
         });
 
@@ -741,14 +738,14 @@
 
         // System Load
         let loadInterval = null;
-        let networkGraphData = { download: [], upload: [] };
+        let networkGraphData = {}; // { iface: { download: [], upload: [] } }
         const MAX_GRAPH_POINTS = 60;
 
         function showLoadModal() {
             document.getElementById('loadModal').classList.remove('hidden');
             document.getElementById('loadModal').classList.add('flex');
             // Сброс данных графика при открытии
-            networkGraphData = { download: [], upload: [] };
+            networkGraphData = {};
             loadSystemLoad();
             loadInterval = setInterval(loadSystemLoad, 2000);
         }
@@ -761,12 +758,15 @@
                 loadInterval = null;
             }
             // Очистка данных графика при закрытии
-            networkGraphData = { download: [], upload: [] };
+            networkGraphData = {};
         }
 
-        function drawNetworkGraph() {
-            const canvas = document.getElementById('networkGraph');
+        function drawNetworkGraph(canvasId, ifaceName) {
+            const canvas = document.getElementById(canvasId);
             if (!canvas) return;
+
+            const data = networkGraphData[ifaceName];
+            if (!data) return;
 
             const ctx = canvas.getContext('2d');
             const rect = canvas.parentElement.getBoundingClientRect();
@@ -782,14 +782,15 @@
             // Очистка
             ctx.clearRect(0, 0, width, height);
 
-            if (networkGraphData.download.length === 0) return;
+            if (data.download.length === 0) return;
 
             // Находим максимальное значение для масштабирования
-            const allValues = [...networkGraphData.download, ...networkGraphData.upload];
+            const allValues = [...data.download, ...data.upload];
             const maxValue = Math.max(...allValues, 1024); // минимум 1KB/s для масштаба
 
             // Обновляем отображение максимума
-            document.getElementById('networkGraphMax').textContent = formatSpeedValue(maxValue);
+            const maxEl = document.getElementById('networkGraphMax_' + ifaceName);
+            if (maxEl) maxEl.textContent = formatSpeedValue(maxValue);
 
             const pointWidth = (width - padding * 2) / (MAX_GRAPH_POINTS - 1);
 
@@ -805,8 +806,8 @@
             }
 
             // Функция для рисования линии
-            function drawLine(data, color, fillColor) {
-                if (data.length < 2) return;
+            function drawLine(lineData, color, fillColor) {
+                if (lineData.length < 2) return;
 
                 ctx.beginPath();
                 ctx.strokeStyle = color;
@@ -814,11 +815,11 @@
                 ctx.lineJoin = 'round';
                 ctx.lineCap = 'round';
 
-                const startIdx = Math.max(0, MAX_GRAPH_POINTS - data.length);
+                const startIdx = Math.max(0, MAX_GRAPH_POINTS - lineData.length);
 
-                for (let i = 0; i < data.length; i++) {
+                for (let i = 0; i < lineData.length; i++) {
                     const x = padding + (startIdx + i) * pointWidth;
-                    const y = height - padding - (data[i] / maxValue) * (height - padding * 2);
+                    const y = height - padding - (lineData[i] / maxValue) * (height - padding * 2);
 
                     if (i === 0) {
                         ctx.moveTo(x, y);
@@ -829,7 +830,7 @@
                 ctx.stroke();
 
                 // Заливка под графиком
-                ctx.lineTo(padding + (startIdx + data.length - 1) * pointWidth, height - padding);
+                ctx.lineTo(padding + (startIdx + lineData.length - 1) * pointWidth, height - padding);
                 ctx.lineTo(padding + startIdx * pointWidth, height - padding);
                 ctx.closePath();
                 ctx.fillStyle = fillColor;
@@ -837,10 +838,10 @@
             }
 
             // Рисуем Download (зеленый)
-            drawLine(networkGraphData.download, 'rgba(74, 222, 128, 1)', 'rgba(74, 222, 128, 0.15)');
+            drawLine(data.download, 'rgba(74, 222, 128, 1)', 'rgba(74, 222, 128, 0.15)');
 
             // Рисуем Upload (синий)
-            drawLine(networkGraphData.upload, 'rgba(96, 165, 250, 1)', 'rgba(96, 165, 250, 0.15)');
+            drawLine(data.upload, 'rgba(96, 165, 250, 1)', 'rgba(96, 165, 250, 0.15)');
         }
 
         function formatSpeedValue(bytesPerSec) {
@@ -899,50 +900,62 @@
 
                 // Network
                 if (data.network && data.network.length > 0) {
-                    // Суммируем скорости всех интерфейсов для графика
-                    let totalDownload = 0;
-                    let totalUpload = 0;
-
+                    // Обновляем данные графиков для каждого интерфейса
                     data.network.forEach(n => {
-                        totalDownload += parseSpeedToBytes(n.rxSpeed);
-                        totalUpload += parseSpeedToBytes(n.txSpeed);
+                        if (!networkGraphData[n.interface]) {
+                            networkGraphData[n.interface] = { download: [], upload: [] };
+                        }
+
+                        const download = parseSpeedToBytes(n.rxSpeed);
+                        const upload = parseSpeedToBytes(n.txSpeed);
+
+                        networkGraphData[n.interface].download.push(download);
+                        networkGraphData[n.interface].upload.push(upload);
+
+                        // Ограничиваем количество точек
+                        if (networkGraphData[n.interface].download.length > MAX_GRAPH_POINTS) {
+                            networkGraphData[n.interface].download.shift();
+                            networkGraphData[n.interface].upload.shift();
+                        }
                     });
 
-                    // Добавляем данные в график
-                    networkGraphData.download.push(totalDownload);
-                    networkGraphData.upload.push(totalUpload);
-
-                    // Ограничиваем количество точек
-                    if (networkGraphData.download.length > MAX_GRAPH_POINTS) {
-                        networkGraphData.download.shift();
-                        networkGraphData.upload.shift();
-                    }
-
-                    // Перерисовываем график
-                    drawNetworkGraph();
-
+                    // Генерируем HTML для каждого интерфейса с отдельным графиком
                     document.getElementById('loadNetwork').innerHTML = data.network.map(n => `
-                        <div class="py-2 border-b border-dark-card last:border-0">
+                        <div class="bg-dark-card rounded-lg p-3 border border-dark-border">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-gray-300 font-medium">${n.interface}</span>
-                                <div class="flex gap-4 text-xs">
-                                    <span class="text-gray-500">Всего: ${n.rx} / ${n.tx}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-200 font-medium">${n.interface}</span>
+                                    ${n.ipv4 ? `<span class="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full font-mono">${n.ipv4}</span>` : ''}
+                                </div>
+                                <span id="networkGraphMax_${n.interface}" class="text-xs text-gray-500">0 KB/s</span>
+                            </div>
+                            <div class="relative h-20 bg-dark-bg rounded-lg overflow-hidden border border-dark-border mb-2">
+                                <canvas id="networkGraph_${n.interface}" class="w-full h-full"></canvas>
+                                <div class="absolute bottom-1 right-2 flex items-center gap-3 text-xs">
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 bg-green-400 rounded-full"></span> Down</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-400 rounded-full"></span> Up</span>
                                 </div>
                             </div>
-                            <div class="flex gap-6">
-                                <div class="flex items-center gap-2">
-                                    <i class="ri-arrow-down-line text-green-400"></i>
-                                    <span class="text-green-400 font-mono text-sm">${n.rxSpeed}</span>
-                                    <span class="text-gray-500 text-xs">Download</span>
+                            <div class="flex items-center justify-between">
+                                <div class="flex gap-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <i class="ri-arrow-down-line text-green-400 text-sm"></i>
+                                        <span class="text-green-400 font-mono text-sm">${n.rxSpeed}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <i class="ri-arrow-up-line text-blue-400 text-sm"></i>
+                                        <span class="text-blue-400 font-mono text-sm">${n.txSpeed}</span>
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <i class="ri-arrow-up-line text-blue-400"></i>
-                                    <span class="text-blue-400 font-mono text-sm">${n.txSpeed}</span>
-                                    <span class="text-gray-500 text-xs">Upload</span>
-                                </div>
+                                <span class="text-xs text-gray-500">Всего: ${n.rx} / ${n.tx}</span>
                             </div>
                         </div>
                     `).join('');
+
+                    // Перерисовываем графики для каждого интерфейса
+                    data.network.forEach(n => {
+                        drawNetworkGraph('networkGraph_' + n.interface, n.interface);
+                    });
                 } else {
                     document.getElementById('loadNetwork').innerHTML = '<div class="text-gray-500 text-sm">Нет данных</div>';
                 }
@@ -1060,10 +1073,8 @@
             window.location.href = API_URL + '/login';
         }
 
-        // Закрытие модалок по клику вне
-        document.getElementById('siteModal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) closeModal();
-        });
+        // Закрытие модалок по клику вне (кроме siteModal - только на крестик)
+        // siteModal закрывается только по крестику или кнопке "Отмена"
         document.getElementById('reissueModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closeReissueModal();
         });
