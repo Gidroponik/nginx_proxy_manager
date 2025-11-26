@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - Nginx Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#141414',
+                            border: '#262626',
+                            hover: '#1a1a1a'
+                        },
+                        method: {
+                            get: '#61affe',
+                            post: '#49cc90',
+                            delete: '#f93e3e',
+                            put: '#fca130'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        pre { white-space: pre-wrap; word-break: break-all; }
+        .code-block { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    </style>
+    <script>
+        // Динамическое определение базового URL
+        const BASE_URL = window.location.protocol + '//' + window.location.host;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Обновляем все примеры с реальным URL сервера
+            document.querySelectorAll('.api-base-url').forEach(el => {
+                el.textContent = BASE_URL + '/api/v1';
+            });
+            document.querySelectorAll('.api-example-url').forEach(el => {
+                el.textContent = el.textContent.replace(/https:\/\/your-server\.com/g, BASE_URL);
+            });
+        });
+    </script>
+</head>
+<body class="bg-dark-bg min-h-screen text-white">
+    <!-- Header -->
+    <header class="border-b border-dark-border sticky top-0 bg-dark-bg/95 backdrop-blur-sm z-50">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+                        <i class="ri-book-open-line text-xl text-black"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">Nginx Manager API</h1>
+                        <div class="text-xs text-gray-500">v1.0 Documentation</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 bg-green-500/10 text-green-400 text-xs font-medium rounded-full">REST API</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Introduction -->
+        <section class="mb-8">
+            <div class="bg-dark-card border border-dark-border rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="ri-information-line text-blue-400"></i>
+                    Введение
+                </h2>
+                <p class="text-gray-400 mb-4">
+                    API для программного управления конфигурациями Nginx. Все запросы требуют авторизации через API ключ.
+                </p>
+                <div class="bg-dark-bg rounded-xl p-4 mb-4">
+                    <div class="text-sm text-gray-400 mb-2">Base URL:</div>
+                    <code class="text-white code-block api-base-url">https://your-server.com/api/v1</code>
+                </div>
+            </div>
+        </section>
+
+        <!-- Authentication -->
+        <section class="mb-8">
+            <div class="bg-dark-card border border-dark-border rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="ri-key-line text-yellow-400"></i>
+                    Авторизация
+                </h2>
+                <p class="text-gray-400 mb-4">
+                    Для всех запросов необходимо передавать API ключ в заголовке <code class="bg-dark-bg px-2 py-1 rounded text-white">X-API-Key</code>.
+                </p>
+                <div class="bg-dark-bg rounded-xl p-4">
+                    <div class="text-sm text-gray-400 mb-2">Пример заголовка:</div>
+                    <pre class="text-green-400 code-block text-sm">X-API-Key: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</pre>
+                </div>
+                <div class="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                    <div class="flex items-start gap-2">
+                        <i class="ri-alert-line text-yellow-400 mt-0.5"></i>
+                        <div class="text-sm text-yellow-200">
+                            API ключи создаются в панели управления. Храните ключи в безопасности и не передавайте третьим лицам.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Codes -->
+        <section class="mb-8">
+            <div class="bg-dark-card border border-dark-border rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="ri-error-warning-line text-red-400"></i>
+                    Коды ошибок
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-dark-border">
+                                <th class="text-left py-3 px-4 text-gray-400 font-medium">Код</th>
+                                <th class="text-left py-3 px-4 text-gray-400 font-medium">HTTP</th>
+                                <th class="text-left py-3 px-4 text-gray-400 font-medium">Описание</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-dark-border">
+                            <tr><td class="py-3 px-4"><code class="text-red-400">MISSING_API_KEY</code></td><td class="py-3 px-4 text-gray-400">401</td><td class="py-3 px-4 text-gray-400">API ключ не передан</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">INVALID_API_KEY</code></td><td class="py-3 px-4 text-gray-400">401</td><td class="py-3 px-4 text-gray-400">Неверный API ключ</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">MISSING_REQUIRED_FIELDS</code></td><td class="py-3 px-4 text-gray-400">400</td><td class="py-3 px-4 text-gray-400">Не переданы обязательные поля</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">DOMAIN_EXISTS</code></td><td class="py-3 px-4 text-gray-400">409</td><td class="py-3 px-4 text-gray-400">Домен уже существует</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">DOMAIN_NOT_FOUND</code></td><td class="py-3 px-4 text-gray-400">404</td><td class="py-3 px-4 text-gray-400">Домен не найден</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">PROTECTED_CONFIG</code></td><td class="py-3 px-4 text-gray-400">400</td><td class="py-3 px-4 text-gray-400">Защищённый конфиг (default)</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">MISSING_SSL_DATA</code></td><td class="py-3 px-4 text-gray-400">400</td><td class="py-3 px-4 text-gray-400">Не переданы данные SSL</td></tr>
+                            <tr><td class="py-3 px-4"><code class="text-red-400">INTERNAL_ERROR</code></td><td class="py-3 px-4 text-gray-400">500</td><td class="py-3 px-4 text-gray-400">Внутренняя ошибка сервера</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Endpoints -->
+        <section class="space-y-6">
+            <h2 class="text-2xl font-bold flex items-center gap-2">
+                <i class="ri-code-s-slash-line text-purple-400"></i>
+                Endpoints
+            </h2>
+
+            <!-- POST /domain/add -->
+            <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-border flex items-center gap-4">
+                    <span class="px-3 py-1 bg-method-post/20 text-method-post text-xs font-bold rounded uppercase">POST</span>
+                    <code class="text-white code-block">/api/v1/domain/add</code>
+                    <span class="ml-auto text-sm text-gray-500">Добавить домен</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-400 mb-4">Создаёт новую конфигурацию nginx для домена с настройкой SSL.</p>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Параметры запроса (JSON body)</h4>
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-dark-border">
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Параметр</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Тип</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Обязательный</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-dark-border">
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">domain</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-green-400">да</span></td>
+                                    <td class="py-2 px-3 text-gray-400">Доменное имя (example.com)</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">proxy_pass</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-green-400">да</span></td>
+                                    <td class="py-2 px-3 text-gray-400">URL бэкенда (<code class="bg-dark-bg px-1 rounded">http://127.0.0.1:3000</code>) или домен (<code class="bg-dark-bg px-1 rounded">https://example.com</code>)</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">websocket_path</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-gray-500">нет</span></td>
+                                    <td class="py-2 px-3 text-gray-400">Путь для WebSocket (/ws, /socket.io)</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">ssl_type</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-gray-500">нет</span></td>
+                                    <td class="py-2 px-3 text-gray-400">
+                                        <code class="bg-dark-bg px-1 rounded">letsencrypt</code> (по умолчанию),
+                                        <code class="bg-dark-bg px-1 rounded">selfsigned</code>,
+                                        <code class="bg-dark-bg px-1 rounded">custom</code>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">ssl_cert</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-yellow-400">*</span></td>
+                                    <td class="py-2 px-3 text-gray-400">Содержимое fullchain.pem (для custom)</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">ssl_key</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-yellow-400">*</span></td>
+                                    <td class="py-2 px-3 text-gray-400">Содержимое privkey.pem (для custom)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-4"><span class="text-yellow-400">*</span> Обязательно при ssl_type = custom</p>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример запроса</h4>
+                    <div class="bg-dark-bg rounded-xl p-4 mb-4">
+                        <pre class="text-sm code-block text-gray-300 api-example-url">curl -X POST https://your-server.com/api/v1/domain/add \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "domain": "example.com",
+    "proxy_pass": "http://127.0.0.1:3000",
+    "websocket_path": "/ws",
+    "ssl_type": "letsencrypt"
+  }'</pre>
+                    </div>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример ответа</h4>
+                    <div class="bg-dark-bg rounded-xl p-4">
+                        <pre class="text-sm code-block text-green-400">{
+  "success": true,
+  "data": {
+    "domain": "example.com",
+    "filename": "example.com.conf",
+    "ssl_status": "ok",
+    "ssl_type": "letsencrypt"
+  }
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POST /domain/delete -->
+            <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-border flex items-center gap-4">
+                    <span class="px-3 py-1 bg-method-post/20 text-method-post text-xs font-bold rounded uppercase">POST</span>
+                    <code class="text-white code-block">/api/v1/domain/delete</code>
+                    <span class="ml-auto text-sm text-gray-500">Удалить домен</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-400 mb-4">Удаляет конфигурацию домена и перезагружает nginx.</p>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Параметры запроса (JSON body)</h4>
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-dark-border">
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Параметр</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Тип</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Обязательный</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">domain</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3"><span class="text-green-400">да</span></td>
+                                    <td class="py-2 px-3 text-gray-400">Доменное имя или имя файла (example.com или example.com.conf)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример запроса</h4>
+                    <div class="bg-dark-bg rounded-xl p-4 mb-4">
+                        <pre class="text-sm code-block text-gray-300 api-example-url">curl -X POST https://your-server.com/api/v1/domain/delete \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "domain": "example.com"
+  }'</pre>
+                    </div>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример ответа</h4>
+                    <div class="bg-dark-bg rounded-xl p-4">
+                        <pre class="text-sm code-block text-green-400">{
+  "success": true,
+  "data": {
+    "domain": "example.com",
+    "deleted": true
+  }
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GET /domain/list -->
+            <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-border flex items-center gap-4">
+                    <span class="px-3 py-1 bg-method-get/20 text-method-get text-xs font-bold rounded uppercase">GET</span>
+                    <code class="text-white code-block">/api/v1/domain/list</code>
+                    <span class="ml-auto text-sm text-gray-500">Список доменов</span>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-400 mb-4">Возвращает список всех настроенных доменов с информацией о SSL.</p>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример запроса</h4>
+                    <div class="bg-dark-bg rounded-xl p-4 mb-4">
+                        <pre class="text-sm code-block text-gray-300 api-example-url">curl -X GET https://your-server.com/api/v1/domain/list \
+  -H "X-API-Key: your-api-key"</pre>
+                    </div>
+
+                    <h4 class="font-semibold mb-3 text-sm text-gray-300">Пример ответа</h4>
+                    <div class="bg-dark-bg rounded-xl p-4">
+                        <pre class="text-sm code-block text-green-400">{
+  "success": true,
+  "data": [
+    {
+      "domain": "example.com",
+      "filename": "example.com.conf",
+      "proxy_pass": "http://127.0.0.1:3000",
+      "ssl_status": "ok",
+      "ssl_type": "letsencrypt"
+    },
+    {
+      "domain": "api.example.com",
+      "filename": "api.example.com.conf",
+      "proxy_pass": "http://127.0.0.1:8080",
+      "ssl_status": "ok",
+      "ssl_type": "custom"
+    }
+  ],
+  "count": 2
+}</pre>
+                    </div>
+
+                    <h4 class="font-semibold mb-3 mt-6 text-sm text-gray-300">Поля ответа</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-dark-border">
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Поле</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Тип</th>
+                                    <th class="text-left py-2 px-3 text-gray-400 font-medium">Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-dark-border">
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">domain</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3 text-gray-400">Доменное имя</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">filename</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3 text-gray-400">Имя конфиг-файла</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">proxy_pass</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3 text-gray-400">URL бэкенда</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">ssl_status</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3 text-gray-400">
+                                        <code class="bg-dark-bg px-1 rounded">ok</code>,
+                                        <code class="bg-dark-bg px-1 rounded">error</code>,
+                                        <code class="bg-dark-bg px-1 rounded">none</code>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3"><code class="text-blue-400">ssl_type</code></td>
+                                    <td class="py-2 px-3 text-gray-400">string</td>
+                                    <td class="py-2 px-3 text-gray-400">
+                                        <code class="bg-dark-bg px-1 rounded">letsencrypt</code>,
+                                        <code class="bg-dark-bg px-1 rounded">custom</code>,
+                                        <code class="bg-dark-bg px-1 rounded">none</code>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t border-dark-border text-center text-gray-500 text-sm">
+            <p>Nginx Manager API Documentation</p>
+        </footer>
+    </main>
+</body>
+</html>

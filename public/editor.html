@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор конфигурации - Nginx Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/nginx/nginx.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#141414',
+                            border: '#262626',
+                            hover: '#1a1a1a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .CodeMirror {
+            height: calc(100vh - 200px);
+            font-size: 14px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: #0a0a0a;
+            border-radius: 12px;
+        }
+        .CodeMirror-gutters {
+            background: #141414;
+            border-right: 1px solid #262626;
+        }
+        .CodeMirror-linenumber {
+            color: #555;
+        }
+        .cm-s-material-darker .cm-keyword { color: #c792ea; }
+        .cm-s-material-darker .cm-variable { color: #82aaff; }
+        .cm-s-material-darker .cm-variable-2 { color: #eeffff; }
+        .cm-s-material-darker .cm-string { color: #c3e88d; }
+        .cm-s-material-darker .cm-number { color: #f78c6c; }
+        .cm-s-material-darker .cm-comment { color: #546e7a; }
+        .cm-s-material-darker .cm-attribute { color: #ffcb6b; }
+        .CodeMirror-selected { background: #264f78 !important; }
+        .CodeMirror-cursor { border-left: 2px solid #fff !important; }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg min-h-screen text-white">
+    <!-- Header -->
+    <header class="border-b border-dark-border sticky top-0 bg-dark-bg/95 backdrop-blur-sm z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-4">
+                    <a href="javascript:history.back()" class="p-2 hover:bg-dark-hover rounded-lg transition-colors">
+                        <i class="ri-arrow-left-line text-xl text-gray-400 hover:text-white"></i>
+                    </a>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+                            <i class="ri-code-line text-xl text-black"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-lg">Редактор конфигурации</h1>
+                            <div id="filename" class="text-xs text-gray-500">Загрузка...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="validateConfig()" class="px-4 py-2 bg-dark-card border border-dark-border text-white font-medium rounded-xl hover:bg-dark-hover transition-colors flex items-center gap-2">
+                        <i class="ri-checkbox-circle-line"></i>
+                        <span class="hidden sm:inline">Проверить</span>
+                    </button>
+                    <button onclick="saveConfig()" id="saveBtn" class="px-4 py-2 bg-white text-black font-semibold rounded-xl hover:bg-gray-200 transition-colors flex items-center gap-2">
+                        <i class="ri-save-line"></i>
+                        <span class="hidden sm:inline">Сохранить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Status Bar -->
+        <div id="statusBar" class="hidden mb-4 p-4 rounded-xl border flex items-center gap-3">
+            <i id="statusIcon" class="text-xl"></i>
+            <span id="statusText"></span>
+        </div>
+
+        <!-- Editor -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-dark-border flex items-center justify-between">
+                <div class="flex items-center gap-2 text-sm text-gray-400">
+                    <i class="ri-file-code-line"></i>
+                    <span id="filepath">/etc/nginx/conf.d/</span>
+                </div>
+                <div class="flex items-center gap-4 text-xs text-gray-500">
+                    <span>Nginx Config</span>
+                    <span id="cursorPos">Строка 1, Колонка 1</span>
+                </div>
+            </div>
+            <textarea id="editor"></textarea>
+        </div>
+
+        <!-- Help -->
+        <div class="mt-4 p-4 bg-dark-card border border-dark-border rounded-xl">
+            <div class="flex items-start gap-3">
+                <i class="ri-information-line text-gray-400 mt-0.5"></i>
+                <div class="text-sm text-gray-400">
+                    <p class="mb-2"><strong class="text-gray-300">Горячие клавиши:</strong></p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <span><kbd class="px-2 py-1 bg-dark-bg rounded">Ctrl+S</kbd> Сохранить</span>
+                        <span><kbd class="px-2 py-1 bg-dark-bg rounded">Ctrl+Z</kbd> Отмена</span>
+                        <span><kbd class="px-2 py-1 bg-dark-bg rounded">Ctrl+F</kbd> Поиск</span>
+                        <span><kbd class="px-2 py-1 bg-dark-bg rounded">Ctrl+G</kbd> К строке</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="text-center">
+            <i class="ri-loader-4-line animate-spin text-4xl text-white mb-4"></i>
+            <p class="text-gray-400" id="loadingText">Загрузка...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.pathname.replace('/editor', '');
+        const urlParams = new URLSearchParams(window.location.search);
+        const filename = urlParams.get('file');
+
+        let editor;
+        let originalContent = '';
+
+        // Инициализация редактора
+        function initEditor() {
+            editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+                mode: 'nginx',
+                theme: 'material-darker',
+                lineNumbers: true,
+                lineWrapping: true,
+                indentUnit: 4,
+                tabSize: 4,
+                indentWithTabs: false,
+                autoCloseBrackets: true,
+                matchBrackets: true,
+                styleActiveLine: true,
+                extraKeys: {
+                    'Ctrl-S': function(cm) { saveConfig(); },
+                    'Cmd-S': function(cm) { saveConfig(); }
+                }
+            });
+
+            editor.on('cursorActivity', function() {
+                const cursor = editor.getCursor();
+                document.getElementById('cursorPos').textContent =
+                    `Строка ${cursor.line + 1}, Колонка ${cursor.ch + 1}`;
+            });
+        }
+
+        // Загрузка конфигурации
+        async function loadConfig() {
+            if (!filename) {
+                showStatus('error', 'Файл не указан');
+                hideLoading();
+                return;
+            }
+
+            document.getElementById('filename').textContent = filename;
+            document.getElementById('filepath').textContent = `/etc/nginx/.../${filename}`;
+
+            try {
+                const res = await fetch(API_URL + '/api/config-raw/' + encodeURIComponent(filename));
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Ошибка загрузки');
+                }
+
+                originalContent = data.content;
+                editor.setValue(data.content);
+                editor.clearHistory();
+                hideLoading();
+            } catch (error) {
+                showStatus('error', 'Ошибка загрузки: ' + error.message);
+                hideLoading();
+            }
+        }
+
+        // Проверка конфигурации
+        async function validateConfig() {
+            showLoading('Проверка конфигурации...');
+
+            try {
+                const content = editor.getValue();
+                const res = await fetch(API_URL + '/api/validate-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, content })
+                });
+
+                const data = await res.json();
+                hideLoading();
+
+                if (data.valid) {
+                    showStatus('success', 'Конфигурация валидна');
+                } else {
+                    showStatus('error', 'Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                hideLoading();
+                showStatus('error', 'Ошибка проверки: ' + error.message);
+            }
+        }
+
+        // Сохранение конфигурации
+        async function saveConfig() {
+            const content = editor.getValue();
+
+            if (content === originalContent) {
+                showStatus('info', 'Изменений нет');
+                return;
+            }
+
+            showLoading('Сохранение и проверка...');
+
+            try {
+                const res = await fetch(API_URL + '/api/config-raw/' + encodeURIComponent(filename), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+
+                const data = await res.json();
+                hideLoading();
+
+                if (res.ok) {
+                    originalContent = content;
+                    showStatus('success', 'Конфигурация сохранена и применена');
+                } else {
+                    showStatus('error', data.error || 'Ошибка сохранения');
+                }
+            } catch (error) {
+                hideLoading();
+                showStatus('error', 'Ошибка: ' + error.message);
+            }
+        }
+
+        // UI функции
+        function showStatus(type, message) {
+            const bar = document.getElementById('statusBar');
+            const icon = document.getElementById('statusIcon');
+            const text = document.getElementById('statusText');
+
+            bar.classList.remove('hidden', 'bg-green-500/10', 'border-green-500/20', 'text-green-400',
+                'bg-red-500/10', 'border-red-500/20', 'text-red-400',
+                'bg-blue-500/10', 'border-blue-500/20', 'text-blue-400');
+
+            if (type === 'success') {
+                bar.classList.add('bg-green-500/10', 'border-green-500/20', 'text-green-400');
+                icon.className = 'ri-checkbox-circle-line text-xl';
+            } else if (type === 'error') {
+                bar.classList.add('bg-red-500/10', 'border-red-500/20', 'text-red-400');
+                icon.className = 'ri-error-warning-line text-xl';
+            } else {
+                bar.classList.add('bg-blue-500/10', 'border-blue-500/20', 'text-blue-400');
+                icon.className = 'ri-information-line text-xl';
+            }
+
+            text.textContent = message;
+
+            setTimeout(() => {
+                bar.classList.add('hidden');
+            }, 5000);
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text || 'Загрузка...';
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Предупреждение при уходе со страницы
+        window.addEventListener('beforeunload', function(e) {
+            if (editor && editor.getValue() !== originalContent) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        // Инициализация
+        initEditor();
+        loadConfig();
+    </script>
+</body>
+</html>

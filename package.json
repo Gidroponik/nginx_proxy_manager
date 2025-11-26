@@ -1,0 +1,17 @@
+{
+  "name": "nginx-manager",
+  "version": "2.0.0",
+  "description": "Nginx configuration manager with web interface",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "keywords": ["nginx", "manager", "ssl", "letsencrypt"],
+  "author": "",
+  "license": "ISC"
+}
