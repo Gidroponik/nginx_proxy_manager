@@ -47,12 +47,14 @@ async function apiKeyMiddleware(req, res, next) {
     }
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const isValid = await validateApiKey(apiKey, clientIp);
+    const keyData = await validateApiKey(apiKey, clientIp);
 
-    if (!isValid) {
+    if (!keyData) {
         return res.status(401).json({ error: 'Invalid API key', code: 'INVALID_API_KEY' });
     }
 
+    // Сохраняем данные ключа для использования в routes
+    req.apiKeyData = keyData;
     next();
 }
 
@@ -158,7 +160,11 @@ app.get(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
                 }
             }
 
-            configs.push({ filename: file, domain, sslStatus, isDefault: false });
+            // Extract listenIP from config (e.g., "listen 192.168.1.100:80;" or "listen 80;")
+            const listenMatch = content.match(/listen\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+            const listenIP = listenMatch ? listenMatch[1] : '';
+
+            configs.push({ filename: file, domain, sslStatus, isDefault: false, listenIP });
         }
 
         // Добавляем default конфиг в начало списка
@@ -380,12 +386,15 @@ app.get(SECRET_PATH + '/api/config/:filename', authMiddleware, async (req, res) 
 
         const domainMatch = content.match(/server_name\s+([^;]+);/);
         const proxyPassMatch = content.match(/location\s+\/\s+{[^}]*proxy_pass\s+([^;]+);/s);
-        const websocketMatch = content.match(/location\s+(\/[^\s]+)\s+{[^}]*WebSocket/s);
+        // WebSocket location has 7d timeout, find location path (not just "/") with this timeout
+        const websocketMatch = content.match(/location\s+(\/\S+)\s+\{[^}]*proxy_connect_timeout\s+7d/s);
+        const listenMatch = content.match(/listen\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
 
         res.json({
             domain: domainMatch ? domainMatch[1].trim() : '',
             proxyPass: proxyPassMatch ? proxyPassMatch[1].trim() : '',
-            websocketPath: websocketMatch ? websocketMatch[1].trim() : ''
+            websocketPath: websocketMatch ? websocketMatch[1].trim() : '',
+            listenIP: listenMatch ? listenMatch[1] : ''
         });
     } catch (error) {
         addLog(`Error reading config: ${error.message}`, 'error');
@@ -476,9 +485,9 @@ app.post(SECRET_PATH + '/api/validate-config', authMiddleware, async (req, res) 
 // API: Создать конфигурацию
 app.post(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
     try {
-        const { domain, proxyPass, websocketPath, sslType, sslCert, sslKey } = req.body;
+        const { domain, proxyPass, websocketPath, sslType, sslCert, sslKey, listenIP } = req.body;
 
-        addLog(`Creating config for ${domain} (SSL: ${sslType})`, 'info');
+        addLog(`Creating config for ${domain} (SSL: ${sslType}, IP: ${listenIP || 'all'})`, 'info');
 
         if (!domain || !proxyPass) {
             return res.status(400).json({ error: 'Домен и адрес проксирования обязательны' });
@@ -505,7 +514,7 @@ app.post(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
             await fs.writeFile(`${certDir}/fullchain.pem`, sslCert);
             await fs.writeFile(`${certDir}/privkey.pem`, sslKey);
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
-            config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir);
+            config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir, listenIP || '');
             sslStatus = 'ok';
             addLog(`Custom SSL certificate saved for ${domain}`, 'info');
         } else if (sslType === 'selfsigned') {
@@ -514,11 +523,11 @@ app.post(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
             addLog(`Generating DH parameters for ${domain}`, 'info');
             await execPromise(`openssl dhparam -out ${certDir}/dhparam.pem 2048`);
-            config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir);
+            config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir, listenIP || '');
             sslStatus = 'ok';
             addLog(`Self-signed SSL generated for ${domain}`, 'info');
         } else {
-            config = generateNginxConfig(domain, proxyPass, websocketPath, false);
+            config = generateNginxConfig(domain, proxyPass, websocketPath, false, listenIP || '');
         }
 
         await fs.writeFile(configPath, config);
@@ -535,7 +544,7 @@ app.post(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
             try {
                 await execPromise('systemctl stop nginx');
                 await execPromise(`certbot certonly --standalone --preferred-challenges http -d ${domain} --non-interactive --agree-tos --email admin@${domain}`);
-                config = generateNginxConfig(domain, proxyPass, websocketPath, true);
+                config = generateNginxConfig(domain, proxyPass, websocketPath, true, listenIP || '');
                 await fs.writeFile(configPath, config);
                 await execPromise('systemctl start nginx');
                 sslStatus = 'ok';
@@ -559,9 +568,9 @@ app.post(SECRET_PATH + '/api/configs', authMiddleware, async (req, res) => {
 app.put(SECRET_PATH + '/api/config/:filename', authMiddleware, async (req, res) => {
     const { filename } = req.params;
     try {
-        const { domain, proxyPass, websocketPath, updateSSL, sslType, sslCert, sslKey } = req.body;
+        const { domain, proxyPass, websocketPath, updateSSL, sslType, sslCert, sslKey, listenIP } = req.body;
 
-        addLog(`Updating config ${filename}`, 'info');
+        addLog(`Updating config ${filename} (IP: ${listenIP || 'all'})`, 'info');
 
         if (!domain || !proxyPass) {
             return res.status(400).json({ error: 'Домен и адрес проксирования обязательны' });
@@ -583,29 +592,29 @@ app.put(SECRET_PATH + '/api/config/:filename', authMiddleware, async (req, res) 
                 await fs.writeFile(`${certDir}/fullchain.pem`, sslCert);
                 await fs.writeFile(`${certDir}/privkey.pem`, sslKey);
                 await execPromise(`chmod 600 ${certDir}/privkey.pem`);
-                config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir);
+                config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir, listenIP || '');
             } else if (sslType === 'selfsigned') {
                 await execPromise(`mkdir -p ${certDir}`);
                 await execPromise(`openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout ${certDir}/privkey.pem -out ${certDir}/fullchain.pem -subj "/C=RU/ST=Moscow/L=Moscow/O=Org/CN=${domain}"`);
                 await execPromise(`chmod 600 ${certDir}/privkey.pem`);
                 await execPromise(`openssl dhparam -out ${certDir}/dhparam.pem 2048`);
-                config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir);
+                config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir, listenIP || '');
             } else {
-                const tempConfig = generateNginxConfig(domain, proxyPass, websocketPath, false);
+                const tempConfig = generateNginxConfig(domain, proxyPass, websocketPath, false, listenIP || '');
                 await fs.writeFile(configPath, tempConfig);
                 await execPromise('nginx -t && systemctl reload nginx');
                 await execPromise('systemctl stop nginx');
                 await execPromise(`certbot certonly --standalone -d ${domain} --non-interactive --agree-tos --email admin@${domain} --force-renewal`);
-                config = generateNginxConfig(domain, proxyPass, websocketPath, true);
+                config = generateNginxConfig(domain, proxyPass, websocketPath, true, listenIP || '');
                 await execPromise('systemctl start nginx');
             }
         } else {
             if (sslCertMatch && sslCertMatch[1].includes('/etc/letsencrypt/')) {
-                config = generateNginxConfig(domain, proxyPass, websocketPath, true);
+                config = generateNginxConfig(domain, proxyPass, websocketPath, true, listenIP || '');
             } else if (sslCertMatch) {
-                config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir);
+                config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir, listenIP || '');
             } else {
-                config = generateNginxConfig(domain, proxyPass, websocketPath, false);
+                config = generateNginxConfig(domain, proxyPass, websocketPath, false, listenIP || '');
             }
         }
 
@@ -658,7 +667,10 @@ app.post(SECRET_PATH + '/api/reissue-cert/:filename', authMiddleware, async (req
         const content = await fs.readFile(configPath, 'utf8');
         const domainMatch = content.match(/server_name\s+([^;]+);/);
         const proxyPassMatch = content.match(/location\s+\/\s+\{[^}]*proxy_pass\s+([^;]+);/s);
-        const websocketMatch = content.match(/location\s+(\/[^\s]+)\s+\{[^}]*WebSocket/s);
+        // WebSocket location has 7d timeout, find location path (not just "/") with this timeout
+        const websocketMatch = content.match(/location\s+(\/\S+)\s+\{[^}]*proxy_connect_timeout\s+7d/s);
+        const listenMatch = content.match(/listen\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+        const listenIP = listenMatch ? listenMatch[1] : '';
 
         if (!domainMatch || !proxyPassMatch) {
             return res.status(400).json({ error: 'Не удалось распарсить конфигурацию' });
@@ -679,20 +691,20 @@ app.post(SECRET_PATH + '/api/reissue-cert/:filename', authMiddleware, async (req
             await fs.writeFile(`${certDir}/fullchain.pem`, sslCert);
             await fs.writeFile(`${certDir}/privkey.pem`, sslKey);
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
-            config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir);
+            config = generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir, listenIP);
         } else if (sslType === 'selfsigned') {
             await execPromise(`mkdir -p ${certDir}`);
             await execPromise(`openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout ${certDir}/privkey.pem -out ${certDir}/fullchain.pem -subj "/C=RU/ST=Moscow/L=Moscow/O=Org/CN=${domain}"`);
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
             await execPromise(`openssl dhparam -out ${certDir}/dhparam.pem 2048`);
-            config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir);
+            config = generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir, listenIP);
         } else {
-            const tempConfig = generateNginxConfig(domain, proxyPass, websocketPath, false);
+            const tempConfig = generateNginxConfig(domain, proxyPass, websocketPath, false, listenIP);
             await fs.writeFile(configPath, tempConfig);
             await execPromise('nginx -t && systemctl reload nginx');
             await execPromise('systemctl stop nginx');
             await execPromise(`certbot certonly --standalone -d ${domain} --non-interactive --agree-tos --email admin@${domain} --force-renewal`);
-            config = generateNginxConfig(domain, proxyPass, websocketPath, true);
+            config = generateNginxConfig(domain, proxyPass, websocketPath, true, listenIP);
             await execPromise('systemctl start nginx');
         }
 
@@ -763,9 +775,9 @@ app.get(SECRET_PATH + '/api/api-keys', authMiddleware, async (req, res) => {
 // API: Создать API ключ
 app.post(SECRET_PATH + '/api/api-keys', authMiddleware, async (req, res) => {
     try {
-        const { description } = req.body;
-        const apiKey = await createApiKey(description);
-        addLog(`API key created: ${description}`, 'info');
+        const { description, boundIP } = req.body;
+        const apiKey = await createApiKey(description, boundIP || '');
+        addLog(`API key created: ${description} (bound to: ${boundIP || 'all'})`, 'info');
         res.json({ success: true, apiKey });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -792,10 +804,50 @@ app.delete(SECRET_PATH + '/api/api-keys/:key', authMiddleware, async (req, res) 
 // Public API (with API Key auth)
 // ============================================
 
+// GET /interfaces - Получить список IPv4 интерфейсов для привязки доменов
+app.get('/api/v1/interfaces', apiKeyMiddleware, async (req, res) => {
+    try {
+        const os = require('os');
+        const networkInterfaces = os.networkInterfaces();
+        const interfaces = [];
+
+        for (const [name, ifaces] of Object.entries(networkInterfaces)) {
+            for (const iface of ifaces) {
+                if (iface.family === 'IPv4' && !iface.internal && iface.address !== '127.0.0.1') {
+                    interfaces.push({
+                        interface: name,
+                        address: iface.address
+                    });
+                }
+            }
+        }
+
+        // Если ключ привязан к конкретному IP, показываем только его
+        const boundIP = req.apiKeyData.boundIP;
+        const filteredInterfaces = boundIP
+            ? interfaces.filter(i => i.address === boundIP)
+            : interfaces;
+
+        res.json({
+            success: true,
+            data: filteredInterfaces,
+            bound_to: boundIP || null
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+
 // POST /domain/add - Добавить домен
 app.post('/api/v1/domain/add', apiKeyMiddleware, async (req, res) => {
     try {
         const { domain, proxy_pass, websocket_path, ssl_type, ssl_cert, ssl_key } = req.body;
+        // Используем boundIP ключа для привязки домена
+        const listenIP = req.apiKeyData.boundIP || '';
 
         if (!domain || !proxy_pass) {
             return res.status(400).json({
@@ -836,17 +888,17 @@ app.post('/api/v1/domain/add', apiKeyMiddleware, async (req, res) => {
             await fs.writeFile(`${certDir}/fullchain.pem`, ssl_cert);
             await fs.writeFile(`${certDir}/privkey.pem`, ssl_key);
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
-            config = generateNginxConfigCustomSSL(domain, proxy_pass, websocket_path || '', certDir);
+            config = generateNginxConfigCustomSSL(domain, proxy_pass, websocket_path || '', certDir, listenIP);
             sslStatus = 'ok';
         } else if (sslType === 'selfsigned') {
             await execPromise(`mkdir -p ${certDir}`);
             await execPromise(`openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout ${certDir}/privkey.pem -out ${certDir}/fullchain.pem -subj "/C=RU/ST=Moscow/L=Moscow/O=Org/CN=${domain}"`);
             await execPromise(`chmod 600 ${certDir}/privkey.pem`);
             await execPromise(`openssl dhparam -out ${certDir}/dhparam.pem 2048`);
-            config = generateNginxConfigSelfSigned(domain, proxy_pass, websocket_path || '', certDir);
+            config = generateNginxConfigSelfSigned(domain, proxy_pass, websocket_path || '', certDir, listenIP);
             sslStatus = 'ok';
         } else {
-            config = generateNginxConfig(domain, proxy_pass, websocket_path || '', false);
+            config = generateNginxConfig(domain, proxy_pass, websocket_path || '', false, listenIP);
         }
 
         await fs.writeFile(configPath, config);
@@ -863,7 +915,7 @@ app.post('/api/v1/domain/add', apiKeyMiddleware, async (req, res) => {
             try {
                 await execPromise('systemctl stop nginx');
                 await execPromise(`certbot certonly --standalone --preferred-challenges http -d ${domain} --non-interactive --agree-tos --email admin@${domain}`);
-                config = generateNginxConfig(domain, proxy_pass, websocket_path || '', true);
+                config = generateNginxConfig(domain, proxy_pass, websocket_path || '', true, listenIP);
                 await fs.writeFile(configPath, config);
                 await execPromise('systemctl start nginx');
                 sslStatus = 'ok';
@@ -873,7 +925,7 @@ app.post('/api/v1/domain/add', apiKeyMiddleware, async (req, res) => {
             }
         }
 
-        addLog(`Domain ${domain} added via API`, 'info');
+        addLog(`Domain ${domain} added via API (IP: ${listenIP || 'all'})`, 'info');
 
         res.json({
             success: true,
@@ -898,6 +950,7 @@ app.post('/api/v1/domain/add', apiKeyMiddleware, async (req, res) => {
 app.post('/api/v1/domain/delete', apiKeyMiddleware, async (req, res) => {
     try {
         const { domain } = req.body;
+        const boundIP = req.apiKeyData.boundIP || '';
 
         if (!domain) {
             return res.status(400).json({
@@ -929,6 +982,21 @@ app.post('/api/v1/domain/delete', apiKeyMiddleware, async (req, res) => {
             });
         }
 
+        // Проверяем что домен привязан к IP ключа (если ключ ограничен)
+        if (boundIP) {
+            const content = await fs.readFile(configPath, 'utf8');
+            const listenMatch = content.match(/listen\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+            const domainIP = listenMatch ? listenMatch[1] : '';
+
+            if (domainIP !== boundIP) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Access denied: domain is not bound to your API key IP',
+                    code: 'ACCESS_DENIED'
+                });
+            }
+        }
+
         await fs.unlink(configPath);
 
         if (OS_INFO.useSitesEnabled) {
@@ -957,6 +1025,8 @@ app.post('/api/v1/domain/delete', apiKeyMiddleware, async (req, res) => {
 // GET /domain/list - Список доменов
 app.get('/api/v1/domain/list', apiKeyMiddleware, async (req, res) => {
     try {
+        const boundIP = req.apiKeyData.boundIP || '';
+
         try {
             await fs.access(NGINX_CONF_DIR);
         } catch {
@@ -971,6 +1041,15 @@ app.get('/api/v1/domain/list', apiKeyMiddleware, async (req, res) => {
 
             const configPath = path.join(NGINX_CONF_DIR, file);
             const content = await fs.readFile(configPath, 'utf8');
+
+            // Extract listenIP from config
+            const listenMatch = content.match(/listen\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+            const listenIP = listenMatch ? listenMatch[1] : '';
+
+            // Фильтруем по boundIP ключа (если ключ ограничен)
+            if (boundIP && listenIP !== boundIP) {
+                continue; // Пропускаем домены не привязанные к IP ключа
+            }
 
             const domainMatch = content.match(/server_name\s+([^;]+);/);
             const domain = domainMatch ? domainMatch[1].trim() : 'unknown';
@@ -1002,14 +1081,16 @@ app.get('/api/v1/domain/list', apiKeyMiddleware, async (req, res) => {
                 filename: file,
                 proxy_pass: proxyPass,
                 ssl_status: sslStatus,
-                ssl_type: sslType
+                ssl_type: sslType,
+                listen_ip: listenIP || null
             });
         }
 
         res.json({
             success: true,
             data: domains,
-            count: domains.length
+            count: domains.length,
+            bound_to: boundIP || null
         });
     } catch (error) {
         res.status(500).json({

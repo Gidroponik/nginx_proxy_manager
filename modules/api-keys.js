@@ -32,13 +32,14 @@ function generateApiKey() {
     return crypto.randomUUID() + '-' + crypto.randomBytes(16).toString('hex');
 }
 
-async function createApiKey(description) {
+async function createApiKey(description, boundIP = '') {
     const data = await loadApiKeys();
     const apiKey = generateApiKey();
 
     data.keys.push({
         key: apiKey,
         description: description || 'Без описания',
+        boundIP: boundIP || '', // Привязка к конкретному IPv4 интерфейсу (пусто = все)
         createdAt: new Date().toISOString(),
         lastUsedAt: null,
         lastIp: null
@@ -66,14 +67,19 @@ async function validateApiKey(apiKey, ip) {
     const keyData = data.keys.find(k => k.key === apiKey);
 
     if (!keyData) {
-        return false;
+        return null;
     }
 
     keyData.lastUsedAt = new Date().toISOString();
     keyData.lastIp = ip;
     await saveApiKeys(data);
 
-    return true;
+    // Возвращаем данные ключа включая boundIP
+    return {
+        valid: true,
+        boundIP: keyData.boundIP || '',
+        description: keyData.description
+    };
 }
 
 async function listApiKeys() {
@@ -82,6 +88,7 @@ async function listApiKeys() {
         key: k.key.substring(0, 8) + '...' + k.key.substring(k.key.length - 8),
         fullKey: k.key,
         description: k.description,
+        boundIP: k.boundIP || '',
         createdAt: k.createdAt,
         lastUsedAt: k.lastUsedAt,
         lastIp: k.lastIp

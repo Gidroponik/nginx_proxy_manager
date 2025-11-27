@@ -148,6 +148,14 @@
                 </div>
 
                 <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Привязать к IP <span class="text-gray-600">(опционально)</span></label>
+                    <select name="listenIP" id="listenIPSelect"
+                        class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white focus:outline-none focus:border-white transition-colors">
+                        <option value="">Все интерфейсы (0.0.0.0)</option>
+                    </select>
+                </div>
+
+                <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">SSL сертификат</label>
                     <select name="sslType" id="sslTypeSelect" onchange="toggleSSLFields()"
                         class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white focus:outline-none focus:border-white transition-colors">
@@ -312,7 +320,7 @@
     <!-- API Keys Modal -->
     <div id="apiKeysModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
         <div class="bg-dark-card border border-dark-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
-            <div class="px-6 py-4 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card">
+            <div class="px-4 sm:px-6 py-4 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card">
                 <h3 class="font-semibold text-lg flex items-center gap-2">
                     <i class="ri-key-2-line text-yellow-400"></i>
                     API Ключи
@@ -321,16 +329,20 @@
                     <i class="ri-close-line text-xl"></i>
                 </button>
             </div>
-            <div class="p-6">
+            <div class="p-4 sm:p-6">
                 <!-- Create new key -->
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-400 mb-2">Создать новый ключ</label>
-                    <div class="flex gap-3">
+                    <div class="flex flex-col gap-3">
                         <input type="text" id="apiKeyDescription" placeholder="Описание (для кого)"
-                            class="flex-1 px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-white transition-colors">
-                        <button onclick="createApiKey()" class="px-4 py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-200 transition-colors flex items-center gap-2">
+                            class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-white transition-colors">
+                        <select id="apiKeyBoundIP"
+                            class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white focus:outline-none focus:border-white transition-colors">
+                            <option value="">Все IP (полный доступ)</option>
+                        </select>
+                        <button onclick="createApiKey()" class="w-full px-4 py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
                             <i class="ri-add-line"></i>
-                            Создать
+                            Создать ключ
                         </button>
                     </div>
                 </div>
@@ -338,13 +350,13 @@
                 <!-- New key display -->
                 <div id="newKeyDisplay" class="hidden mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                     <div class="flex items-start gap-3">
-                        <i class="ri-checkbox-circle-line text-green-400 text-xl mt-0.5"></i>
+                        <i class="ri-checkbox-circle-line text-green-400 text-xl mt-0.5 flex-shrink-0"></i>
                         <div class="flex-1 min-w-0">
-                            <div class="text-sm text-green-400 mb-2">Ключ создан! Скопируйте его сейчас - он больше не будет показан полностью.</div>
+                            <div class="text-sm text-green-400 mb-2">Ключ создан!</div>
                             <div class="flex gap-2">
                                 <input type="text" id="newKeyValue" readonly
-                                    class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white font-mono text-xs">
-                                <button onclick="copyNewKey()" class="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-hover transition-colors">
+                                    class="flex-1 min-w-0 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white font-mono text-xs">
+                                <button onclick="copyNewKey()" class="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-hover transition-colors flex-shrink-0">
                                     <i class="ri-file-copy-line text-gray-400"></i>
                                 </button>
                             </div>
@@ -352,22 +364,28 @@
                     </div>
                 </div>
 
-                <!-- Keys table -->
-                <div class="overflow-x-auto">
+                <!-- Keys table (desktop) -->
+                <div class="hidden sm:block overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-dark-border">
                                 <th class="text-left py-3 px-2 text-gray-400 font-medium">Ключ</th>
                                 <th class="text-left py-3 px-2 text-gray-400 font-medium">Описание</th>
+                                <th class="text-left py-3 px-2 text-gray-400 font-medium">Привязка к IP</th>
                                 <th class="text-left py-3 px-2 text-gray-400 font-medium">Последний IP</th>
-                                <th class="text-left py-3 px-2 text-gray-400 font-medium">Последнее использование</th>
+                                <th class="text-left py-3 px-2 text-gray-400 font-medium">Использование</th>
                                 <th class="text-right py-3 px-2"></th>
                             </tr>
                         </thead>
                         <tbody id="apiKeysTable" class="divide-y divide-dark-border">
-                            <tr><td colspan="5" class="py-8 text-center text-gray-500">Загрузка...</td></tr>
+                            <tr><td colspan="6" class="py-8 text-center text-gray-500">Загрузка...</td></tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Keys cards (mobile) -->
+                <div id="apiKeysCards" class="sm:hidden space-y-3">
+                    <div class="text-center text-gray-500 py-8">Загрузка...</div>
                 </div>
             </div>
         </div>
@@ -375,6 +393,7 @@
 
     <script>
         const API_URL = window.location.pathname;
+        let serverIpAddresses = []; // Хранение IP адресов сервера
 
         // Загрузка данных
         async function loadSystemInfo() {
@@ -386,8 +405,15 @@
                     apiDocsPath = data.apiDocsPath;
                 }
 
-                // Отображение IP адресов
+                // Сохранение и отображение IP адресов
                 if (data.ipAddresses && data.ipAddresses.length > 0) {
+                    serverIpAddresses = data.ipAddresses;
+
+                    // Заполняем select для выбора IP
+                    const ipSelect = document.getElementById('listenIPSelect');
+                    ipSelect.innerHTML = '<option value="">Все интерфейсы (0.0.0.0)</option>' +
+                        data.ipAddresses.map(ip => `<option value="${ip.address}">${ip.address} (${ip.interface})</option>`).join('');
+
                     const ipContainer = document.getElementById('ipAddresses');
                     ipContainer.innerHTML = data.ipAddresses.map((ip, idx) => `
                         <div class="flex items-center gap-1 px-2 py-1 bg-dark-card border border-dark-border rounded-lg">
@@ -505,7 +531,10 @@
                                 <i class="ri-${config.sslStatus === 'ok' ? 'shield-check' : 'shield-cross'}-line ${config.sslStatus === 'ok' ? 'text-green-400' : 'text-red-400'}"></i>
                             </div>
                             <div class="min-w-0">
-                                <div class="font-medium truncate">${config.domain}</div>
+                                <div class="font-medium truncate flex items-center gap-2">
+                                    ${config.domain}
+                                    ${config.listenIP ? `<span class="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-mono">${config.listenIP}</span>` : ''}
+                                </div>
                                 <div class="text-sm text-gray-500 truncate">${config.filename}</div>
                             </div>
                         </div>
@@ -546,6 +575,7 @@
             document.getElementById('siteForm').reset();
             document.getElementById('editFilename').value = '';
             document.getElementById('domainInput').readOnly = false;
+            document.getElementById('listenIPSelect').value = '';
             document.getElementById('customSSLFields').classList.add('hidden');
             document.getElementById('siteModal').classList.remove('hidden');
             document.getElementById('siteModal').classList.add('flex');
@@ -562,6 +592,7 @@
                 document.getElementById('domainInput').readOnly = true;
                 document.getElementById('proxyPassInput').value = config.proxyPass;
                 document.getElementById('websocketInput').value = config.websocketPath || '';
+                document.getElementById('listenIPSelect').value = config.listenIP || '';
                 document.getElementById('sslTypeSelect').value = 'letsencrypt';
                 document.getElementById('customSSLFields').classList.add('hidden');
                 document.getElementById('siteModal').classList.remove('hidden');
@@ -621,6 +652,7 @@
                 domain: formData.get('domain'),
                 proxyPass: formData.get('proxyPass'),
                 websocketPath: formData.get('websocketPath') || '',
+                listenIP: formData.get('listenIP') || '',
                 sslType: formData.get('sslType'),
                 sslCert: formData.get('sslCert') || '',
                 sslKey: formData.get('sslKey') || ''
@@ -973,6 +1005,12 @@
             document.getElementById('apiKeysModal').classList.remove('hidden');
             document.getElementById('apiKeysModal').classList.add('flex');
             document.getElementById('newKeyDisplay').classList.add('hidden');
+
+            // Заполняем select IP адресами
+            const ipSelect = document.getElementById('apiKeyBoundIP');
+            ipSelect.innerHTML = '<option value="">Все IP (полный доступ)</option>' +
+                serverIpAddresses.map(ip => `<option value="${ip.address}">${ip.address} (${ip.interface})</option>`).join('');
+
             loadApiKeys();
         }
 
@@ -983,23 +1021,37 @@
 
         async function loadApiKeys() {
             const table = document.getElementById('apiKeysTable');
-            table.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-500"><i class="ri-loader-4-line animate-spin"></i></td></tr>';
+            const cards = document.getElementById('apiKeysCards');
+            table.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500"><i class="ri-loader-4-line animate-spin"></i></td></tr>';
+            cards.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="ri-loader-4-line animate-spin"></i></div>';
 
             try {
                 const res = await fetch(API_URL + '/api/api-keys');
                 const keys = await res.json();
 
                 if (keys.length === 0) {
-                    table.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-500">Нет API ключей</td></tr>';
+                    table.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500">Нет API ключей</td></tr>';
+                    cards.innerHTML = '<div class="text-center text-gray-500 py-8">Нет API ключей</div>';
                     return;
                 }
 
+                // Desktop table
                 table.innerHTML = keys.map(key => `
                     <tr class="hover:bg-dark-hover">
                         <td class="py-3 px-2">
-                            <code class="text-xs text-gray-400 font-mono">${key.key}</code>
+                            <div class="flex items-center gap-1">
+                                <code class="text-xs text-gray-400 font-mono">${key.key}</code>
+                                <button onclick="copyApiKey('${key.fullKey}', this)" class="p-1 hover:bg-dark-bg rounded transition-colors" title="Копировать">
+                                    <i class="ri-file-copy-line text-xs text-gray-500 hover:text-white"></i>
+                                </button>
+                            </div>
                         </td>
                         <td class="py-3 px-2 text-gray-300">${key.description}</td>
+                        <td class="py-3 px-2">
+                            ${key.boundIP
+                                ? `<span class="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-mono">${key.boundIP}</span>`
+                                : '<span class="text-xs text-gray-500">Все</span>'}
+                        </td>
                         <td class="py-3 px-2 text-gray-500 text-xs">${key.lastIp || '-'}</td>
                         <td class="py-3 px-2 text-gray-500 text-xs">${key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString('ru') : 'Никогда'}</td>
                         <td class="py-3 px-2 text-right">
@@ -1009,13 +1061,57 @@
                         </td>
                     </tr>
                 `).join('');
+
+                // Mobile cards
+                cards.innerHTML = keys.map(key => `
+                    <div class="bg-dark-bg border border-dark-border rounded-xl p-4">
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="font-medium text-white text-sm">${key.description}</div>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <button onclick="copyApiKey('${key.fullKey}', this)" class="p-1.5 hover:bg-dark-hover rounded-lg transition-colors" title="Копировать ключ">
+                                    <i class="ri-file-copy-line text-gray-400 hover:text-white"></i>
+                                </button>
+                                <button onclick="deleteApiKey('${key.fullKey}')" class="p-1.5 hover:bg-dark-hover rounded-lg transition-colors" title="Удалить">
+                                    <i class="ri-delete-bin-line text-gray-400 hover:text-red-400"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-500">Ключ:</span>
+                                <code class="text-gray-400 font-mono">${key.key}</code>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-500">Привязка к IP:</span>
+                                ${key.boundIP
+                                    ? `<span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-mono">${key.boundIP}</span>`
+                                    : '<span class="text-gray-400">Все</span>'}
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-500">Последний IP:</span>
+                                <span class="text-gray-400">${key.lastIp || '-'}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-500">Использование:</span>
+                                <span class="text-gray-400">${key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString('ru') : 'Никогда'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
             } catch (e) {
-                table.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-red-400">Ошибка загрузки</td></tr>';
+                table.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-red-400">Ошибка загрузки</td></tr>';
+                cards.innerHTML = '<div class="text-center text-red-400 py-8">Ошибка загрузки</div>';
             }
+        }
+
+        function copyApiKey(key, btn) {
+            copyToClipboard(key, btn);
         }
 
         async function createApiKey() {
             const description = document.getElementById('apiKeyDescription').value.trim();
+            const boundIP = document.getElementById('apiKeyBoundIP').value;
+
             if (!description) {
                 alert('Введите описание ключа');
                 return;
@@ -1025,7 +1121,7 @@
                 const res = await fetch(API_URL + '/api/api-keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ description })
+                    body: JSON.stringify({ description, boundIP })
                 });
 
                 const result = await res.json();

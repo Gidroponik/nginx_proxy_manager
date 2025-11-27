@@ -11,21 +11,21 @@ function extractHostFromUrl(url) {
     }
 }
 
-function generateNginxConfig(domain, proxyPass, websocketPath, withSSL) {
+function generateNginxConfig(domain, proxyPass, websocketPath, withSSL, listenIP = '') {
     const proxyHost = extractHostFromUrl(proxyPass);
+    const listen80 = listenIP ? `${listenIP}:80` : '80';
+    const listen443 = listenIP ? `${listenIP}:443 ssl http2` : '443 ssl http2';
     let config = '';
 
     if (withSSL) {
         config += `server {
-    listen 80;
-    listen [::]:80;
+    listen ${listen80};${!listenIP ? '\n    listen [::]:80;' : ''}
     server_name ${domain};
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen ${listen443};${!listenIP ? '\n    listen [::]:443 ssl http2;' : ''}
     server_name ${domain};
 
     ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
@@ -35,8 +35,7 @@ server {
 `;
     } else {
         config += `server {
-    listen 80;
-    listen [::]:80;
+    listen ${listen80};${!listenIP ? '\n    listen [::]:80;' : ''}
     server_name ${domain};
 
     location /.well-known/acme-challenge/ {
@@ -91,19 +90,19 @@ ${proxyHost ? `        proxy_ssl_server_name on;\n        proxy_set_header Host 
     return config;
 }
 
-function generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir) {
+function generateNginxConfigCustomSSL(domain, proxyPass, websocketPath, certDir, listenIP = '') {
     const proxyHost = extractHostFromUrl(proxyPass);
+    const listen80 = listenIP ? `${listenIP}:80` : '80';
+    const listen443 = listenIP ? `${listenIP}:443 ssl http2` : '443 ssl http2';
 
     let config = `server {
-    listen 80;
-    listen [::]:80;
+    listen ${listen80};${!listenIP ? '\n    listen [::]:80;' : ''}
     server_name ${domain};
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen ${listen443};${!listenIP ? '\n    listen [::]:443 ssl http2;' : ''}
     server_name ${domain};
 
     ssl_certificate ${certDir}/fullchain.pem;
@@ -158,19 +157,19 @@ ${proxyHost ? `        proxy_ssl_server_name on;\n        proxy_set_header Host 
     return config;
 }
 
-function generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir) {
+function generateNginxConfigSelfSigned(domain, proxyPass, websocketPath, certDir, listenIP = '') {
     const proxyHost = extractHostFromUrl(proxyPass);
+    const listen80 = listenIP ? `${listenIP}:80` : '80';
+    const listen443 = listenIP ? `${listenIP}:443 ssl http2` : '443 ssl http2';
 
     let config = `server {
-    listen 80;
-    listen [::]:80;
+    listen ${listen80};${!listenIP ? '\n    listen [::]:80;' : ''}
     server_name ${domain};
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen ${listen443};${!listenIP ? '\n    listen [::]:443 ssl http2;' : ''}
     server_name ${domain};
 
     ssl_certificate ${certDir}/fullchain.pem;
